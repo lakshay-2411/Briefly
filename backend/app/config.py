@@ -10,16 +10,21 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.8-flash"
+    gemini_fallback_model: str = "gemini-3.5-flash"
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     tavily_api_key: str = ""
 
     gnani_api_key: str = ""
-    gnani_voice_id: str = ""
+    gnani_model: str = "timbre-v2.5"
+    gnani_voice_id: str = "Kaveri"
+    gnani_language: str = "en-IN"
+    gnani_max_chars: int = 500
 
     brevo_api_key: str = ""
     email_from: str = ""
+    email_from_name: str = "Daily Briefing"
 
     frontend_url: str = "http://localhost:3000"
     generation_lead_minutes: int = 10
