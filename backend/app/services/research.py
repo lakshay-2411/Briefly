@@ -10,9 +10,9 @@ from app.services import llm, search
 log = logging.getLogger(__name__)
 
 TARGET_WORDS = 850  # ~5 minutes at the Gnani voice's ~172 words per minute
-MIN_WORDS, MAX_WORDS = 700, 1000
+MIN_WORDS, MAX_WORDS = 600, 1100
 MIN_ARTICLES = 4
-MAX_ARTICLES = 15
+MAX_ARTICLES = 10
 
 
 def _today(tz: str) -> str:
@@ -75,7 +75,7 @@ def _articles_block(articles: list[dict]) -> str:
     for i, a in enumerate(articles, 1):
         blocks.append(
             f"[{i}] {a['title']}\nURL: {a['url']}\nPublished: {a.get('published_date') or 'unknown'}\n"
-            f"{a['content'][:1500]}"
+            f"{a['content'][:800]}"
         )
     return "\n\n".join(blocks)
 

@@ -9,11 +9,10 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     supabase_jwt_secret: str = ""
 
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.8-flash"
-    gemini_fallback_model: str = "gemini-3.5-flash"
     groq_api_key: str = ""
-    groq_model: str = "openai/gpt-oss-120b"
+    groq_models: str = "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b"  # tried in order
+    openrouter_api_key: str = ""
+    openrouter_models: str = "nvidia/nemotron-3.5-super-vl:free,nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-31b-it:free"  # free models, tried after Groq
     tavily_api_key: str = ""
 
     gnani_api_key: str = ""
