@@ -3,6 +3,12 @@ import type { EpisodeSummary } from "@/lib/api";
 import { formatDateTime, formatDuration } from "@/lib/format";
 import StatusBadge from "./StatusBadge";
 
+function placeholderTitle(ep: EpisodeSummary): string {
+  if (ep.status === "failed") return "Episode failed";
+  if (ep.status === "scheduled") return "Your briefing is ready and on its way";
+  return "Generating episode…";
+}
+
 export default function EpisodeList({
   episodes,
   showTopic = true,
@@ -22,14 +28,14 @@ export default function EpisodeList({
         <li key={ep.id}>
           <Link href={`/episodes/${ep.id}`} className="flex items-start justify-between gap-4 p-4 hover:bg-zinc-50">
             <div className="min-w-0">
-              <p className="truncate font-medium">{ep.title ?? (ep.status === "failed" ? "Episode failed" : "Generating episode…")}</p>
+              <p className="truncate font-medium">{ep.title ?? placeholderTitle(ep)}</p>
               <p className="mt-0.5 truncate text-sm text-zinc-500">
                 {formatDateTime(ep.created_at)}
                 {ep.duration_seconds ? ` · ${formatDuration(ep.duration_seconds)}` : ""}
                 {showTopic ? ` · ${ep.topic}` : ""}
               </p>
             </div>
-            <StatusBadge status={ep.status} />
+            <StatusBadge status={ep.status} deliverAt={ep.deliver_at} />
           </Link>
         </li>
       ))}

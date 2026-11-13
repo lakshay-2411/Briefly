@@ -4,17 +4,17 @@ import { useCallback } from "react";
 import BriefingCard from "@/components/BriefingCard";
 import BriefingForm from "@/components/BriefingForm";
 import EpisodeList from "@/components/EpisodeList";
-import { api, IN_PROGRESS, type EpisodeSummary } from "@/lib/api";
+import { api, IN_PROGRESS, PENDING, type EpisodeSummary } from "@/lib/api";
 import { useLiveData } from "@/lib/useLiveData";
 
-const anyGenerating = (d: { episodes: EpisodeSummary[] }) => d.episodes.some((e) => IN_PROGRESS.includes(e.status));
+const anyPending = (d: { episodes: EpisodeSummary[] }) => d.episodes.some((e) => PENDING.includes(e.status));
 
 export default function Dashboard() {
   const fetcher = useCallback(async () => {
     const [briefings, episodes] = await Promise.all([api.listBriefings(), api.listEpisodes()]);
     return { briefings, episodes };
   }, []);
-  const { data, error, reload } = useLiveData(fetcher, anyGenerating);
+  const { data, error, reload } = useLiveData(fetcher, anyPending);
 
   const generatingIds = new Set(
     (data?.episodes ?? []).filter((e) => IN_PROGRESS.includes(e.status)).map((e) => e.briefing_id),

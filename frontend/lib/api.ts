@@ -2,7 +2,8 @@ import { supabase } from "./supabase";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
-export type EpisodeStatus = "researching" | "writing" | "synthesizing" | "ready" | "failed";
+// "scheduled": generated ahead of time, hidden until its delivery time.
+export type EpisodeStatus = "researching" | "writing" | "synthesizing" | "scheduled" | "ready" | "failed";
 
 export interface Briefing {
   id: string;
@@ -29,6 +30,7 @@ export interface EpisodeSummary {
   summary: string | null;
   duration_seconds: number | null;
   error: string | null;
+  deliver_at: string;
   created_at: string;
 }
 
@@ -94,3 +96,5 @@ export const api = {
 };
 
 export const IN_PROGRESS: EpisodeStatus[] = ["researching", "writing", "synthesizing"];
+// Statuses that will change on their own, so pages keep refreshing while they show one.
+export const PENDING: EpisodeStatus[] = [...IN_PROGRESS, "scheduled"];

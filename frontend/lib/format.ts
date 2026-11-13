@@ -15,6 +15,11 @@ export function formatDateTime(iso: string): string {
   });
 }
 
+/** ISO timestamp -> "6:26 PM" in the viewer's local time. */
+export function formatClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 export function formatDuration(seconds: number | null): string {
   if (!seconds) return "";
   const m = Math.floor(seconds / 60);

@@ -5,12 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import BriefingForm from "@/components/BriefingForm";
 import EpisodeList from "@/components/EpisodeList";
-import { api, ApiError, IN_PROGRESS, type Briefing, type EpisodeSummary } from "@/lib/api";
+import { api, ApiError, IN_PROGRESS, PENDING, type Briefing, type EpisodeSummary } from "@/lib/api";
 import { formatTime } from "@/lib/format";
 import { useLiveData } from "@/lib/useLiveData";
 
 type Data = { briefing: Briefing; episodes: EpisodeSummary[] };
 const anyGenerating = (d: Data) => d.episodes.some((e) => IN_PROGRESS.includes(e.status));
+const anyPending = (d: Data) => d.episodes.some((e) => PENDING.includes(e.status));
 
 export default function BriefingView() {
   const { id } = useParams<{ id: string }>();
@@ -22,7 +23,7 @@ export default function BriefingView() {
     const [briefing, episodes] = await Promise.all([api.getBriefing(id), api.listEpisodes(id)]);
     return { briefing, episodes };
   }, [id]);
-  const { data, error, reload, setData } = useLiveData<Data>(fetcher, anyGenerating);
+  const { data, error, reload, setData } = useLiveData<Data>(fetcher, anyPending);
 
   if (error) {
     const notFound = error instanceof ApiError && error.status === 404;

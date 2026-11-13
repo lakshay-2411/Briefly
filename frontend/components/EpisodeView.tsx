@@ -4,16 +4,17 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback } from "react";
 import StatusBadge from "@/components/StatusBadge";
-import { api, ApiError, IN_PROGRESS, type EpisodeDetail } from "@/lib/api";
-import { formatDateTime, formatDuration } from "@/lib/format";
+import { api, ApiError, IN_PROGRESS, PENDING, type EpisodeDetail } from "@/lib/api";
+import { formatClock, formatDateTime, formatDuration } from "@/lib/format";
 import { useLiveData } from "@/lib/useLiveData";
 
 const isGenerating = (e: EpisodeDetail) => IN_PROGRESS.includes(e.status);
+const isPending = (e: EpisodeDetail) => PENDING.includes(e.status);
 
 export default function EpisodeView() {
   const { id } = useParams<{ id: string }>();
   const fetcher = useCallback(() => api.getEpisode(id), [id]);
-  const { data: episode, error } = useLiveData(fetcher, isGenerating);
+  const { data: episode, error } = useLiveData(fetcher, isPending);
 
   if (error) {
     const notFound = error instanceof ApiError && error.status === 404;
@@ -31,14 +32,15 @@ export default function EpisodeView() {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-xl font-semibold leading-snug tracking-tight">
-              {episode.title ?? "Generating your episode…"}
+              {episode.title ??
+                (episode.status === "scheduled" ? "Your briefing is ready" : "Generating your episode…")}
             </h1>
             <p className="mt-1 text-sm text-zinc-500">
               {formatDateTime(episode.created_at)}
               {episode.duration_seconds ? ` · ${formatDuration(episode.duration_seconds)}` : ""}
             </p>
           </div>
-          <StatusBadge status={episode.status} />
+          <StatusBadge status={episode.status} deliverAt={episode.deliver_at} />
         </div>
 
         {episode.audio_url && (
@@ -49,6 +51,12 @@ export default function EpisodeView() {
           <p className="mt-4 text-sm text-zinc-500">
             The agent is working on this episode. This page updates automatically, and you&apos;ll also get an
             email when it&apos;s ready.
+          </p>
+        )}
+        {episode.status === "scheduled" && (
+          <p className="mt-4 text-sm text-zinc-500">
+            Your episode has been prepared and will be delivered at {formatClock(episode.deliver_at)}. It will
+            appear here and in your inbox then. This page updates automatically.
           </p>
         )}
         {episode.status === "failed" && (
