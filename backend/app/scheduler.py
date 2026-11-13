@@ -6,6 +6,10 @@ The `briefings` table stays the source of truth:
 - the API adds/replaces/removes a briefing's job whenever it changes;
 - when a job fires, the run is claimed atomically via `next_run_at`, so a
   briefing can never run twice for the same day (double fire, catch-up, overlap).
+
+Generation starts `generation_lead_minutes` early; the email is held until the
+user's chosen time by a one-off job per episode. Pending emails are re-scheduled
+on startup, so a restart can't lose one.
 """
 
 import logging
@@ -21,6 +25,7 @@ from app.timeutil import next_run_at
 log = logging.getLogger(__name__)
 
 RECONCILE_JOB_ID = "reconcile"
+EMAIL_JOB_PREFIX = "email-"
 RECONCILE_MINUTES = 30
 STUCK_AFTER_MINUTES = 30
 
@@ -78,11 +83,41 @@ def run_due(briefing_id: str) -> None:
     if not claimed:
         return  # another fire / instance claimed it first
 
+    deliver_at = row["next_run_at"] + timedelta(minutes=settings.generation_lead_minutes)
     try:
-        episode = pipeline.start_episode(briefing_id, str(row["user_id"]))
+        episode = pipeline.start_episode(briefing_id, str(row["user_id"]), deliver_at)
         log.info("Scheduled run started: briefing %s -> episode %s", briefing_id, episode["id"])
     except pipeline.EpisodeInProgress:
         log.info("Briefing %s already has an episode in progress, skipping today's run", briefing_id)
+
+
+def schedule_email(episode_id: str, deliver_at: datetime) -> None:
+    """Send the episode email at `deliver_at`, or right away if that time has passed."""
+    if deliver_at <= datetime.now(timezone.utc):
+        pipeline.deliver_email(episode_id)
+        return
+    sched.add_job(
+        pipeline.deliver_email,
+        "date",
+        run_date=deliver_at,
+        args=[episode_id],
+        id=f"{EMAIL_JOB_PREFIX}{episode_id}",
+        replace_existing=True,
+        misfire_grace_time=None,  # late is better than never
+    )
+    log.info("[%s] email scheduled for %s", episode_id, deliver_at.isoformat())
+
+
+def schedule_pending_emails() -> None:
+    """Re-schedule emails for ready episodes that haven't been sent (lost on restart, or failed)."""
+    rows = db.fetch_all(
+        """
+        select id, deliver_at from episodes
+        where status = 'ready' and email_sent_at is null and deliver_at > now() - interval '1 day'
+        """
+    )
+    for row in rows:
+        schedule_email(str(row["id"]), row["deliver_at"])
 
 
 def catch_up() -> None:
@@ -111,19 +146,26 @@ def reconcile() -> None:
     rows = db.fetch_all("select id, time_of_day, timezone, is_active from briefings where is_active")
     active = {str(r["id"]) for r in rows}
     for job in sched.get_jobs():
-        if job.id != RECONCILE_JOB_ID and job.id not in active:
+        if job.id == RECONCILE_JOB_ID or job.id.startswith(EMAIL_JOB_PREFIX):
+            continue
+        if job.id not in active:
             job.remove()
     for r in rows:
         schedule_briefing(r)
     fail_stuck_episodes()
     catch_up()
+    schedule_pending_emails()
 
 
 def start() -> None:
     sched.start()
     sched.add_job(reconcile, "interval", minutes=RECONCILE_MINUTES, id=RECONCILE_JOB_ID, replace_existing=True)
     reconcile()
-    log.info("Scheduler started with %d briefing job(s)", len(sched.get_jobs()) - 1)
+    log.info("Scheduler started with %d briefing job(s)", len(active_briefing_jobs()))
+
+
+def active_briefing_jobs() -> list:
+    return [j for j in sched.get_jobs() if j.id != RECONCILE_JOB_ID and not j.id.startswith(EMAIL_JOB_PREFIX)]
 
 
 def shutdown() -> None:

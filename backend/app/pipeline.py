@@ -11,6 +11,7 @@ import json
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 
 from psycopg.types.json import Jsonb
@@ -30,19 +31,23 @@ class EpisodeInProgress(Exception):
     pass
 
 
-def start_episode(briefing_id: str, user_id: str) -> dict:
-    """Create an episode row and generate it in the background. Returns the new episode."""
+def start_episode(briefing_id: str, user_id: str, deliver_at: datetime | None = None) -> dict:
+    """Create an episode row and generate it in the background. Returns the new episode.
+
+    The email goes out at `deliver_at`, or as soon as the episode is ready if that has
+    passed (or is None, e.g. "Generate now").
+    """
     episode = db.fetch_one(
         """
-        insert into episodes (briefing_id, user_id, status)
-        select %s, %s, 'researching'
+        insert into episodes (briefing_id, user_id, status, deliver_at)
+        select %s, %s, 'researching', coalesce(%s::timestamptz, now())
         where not exists (
             select 1 from episodes
             where briefing_id = %s and status in ('researching', 'writing', 'synthesizing')
         )
-        returning id, briefing_id, status, created_at
+        returning id, briefing_id, status, deliver_at, created_at
         """,
-        (briefing_id, user_id, briefing_id),
+        (briefing_id, user_id, deliver_at, briefing_id),
     )
     if episode is None:
         raise EpisodeInProgress(briefing_id)
@@ -58,10 +63,9 @@ def _set(episode_id: str, **fields) -> None:
 def run_episode(episode_id: str) -> None:
     row = db.fetch_one(
         """
-        select e.user_id, b.topic, b.timezone, u.email
+        select e.user_id, e.deliver_at, b.topic, b.timezone
         from episodes e
         join briefings b on b.id = e.briefing_id
-        join auth.users u on u.id = e.user_id
         where e.id = %s
         """,
         (episode_id,),
@@ -98,13 +102,33 @@ def run_episode(episode_id: str) -> None:
         _set(episode_id, status="failed", error=str(e)[:1000])
         return
 
+    # Imported here because the scheduler module imports this one.
+    from app import scheduler
+
+    scheduler.schedule_email(episode_id, row["deliver_at"])
+
+
+def deliver_email(episode_id: str) -> None:
+    """Send the "episode ready" email exactly once (the send is claimed atomically)."""
+    row = db.fetch_one(
+        """
+        update episodes e set email_sent_at = now()
+        from auth.users u
+        where e.id = %s and u.id = e.user_id and e.status = 'ready' and e.email_sent_at is null
+        returning e.title, e.summary, u.email
+        """,
+        (episode_id,),
+    )
+    if row is None:
+        return  # already sent, or not ready
     try:
         email.send_episode_email(
-            row["email"], result["title"], result["summary"], f"{settings.frontend_url}/episodes/{episode_id}"
+            row["email"], row["title"], row["summary"], f"{settings.frontend_url}/episodes/{episode_id}"
         )
+        log.info("[%s] email sent", episode_id)
     except Exception:
-        # The episode itself is fine; don't mark it failed because of email.
-        log.exception("[%s] email failed", episode_id)
+        log.exception("[%s] email failed, will retry", episode_id)
+        db.execute("update episodes set email_sent_at = null where id = %s", (episode_id,))
 
 
 # ---------- CLI (local debugging, no DB) ----------
