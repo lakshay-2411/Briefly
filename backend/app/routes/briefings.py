@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import AfterValidator, BaseModel, Field
 
-from app import db, pipeline
+from app import db, pipeline, scheduler
 from app.auth import User, get_current_user
 from app.timeutil import next_run_at
 
@@ -67,7 +67,7 @@ def list_briefings(user: User = Depends(get_current_user)):
 
 @router.post("", response_model=BriefingOut, status_code=status.HTTP_201_CREATED)
 def create_briefing(body: BriefingIn, user: User = Depends(get_current_user)):
-    return db.fetch_one(
+    row = db.fetch_one(
         f"""
         insert into briefings (user_id, topic, time_of_day, timezone, next_run_at)
         values (%s, %s, %s, %s, %s)
@@ -76,6 +76,8 @@ def create_briefing(body: BriefingIn, user: User = Depends(get_current_user)):
         (user.id, body.topic.strip(), body.time_of_day, body.timezone,
          next_run_at(body.time_of_day, body.timezone)),
     )
+    scheduler.schedule_briefing(row)
+    return row
 
 
 @router.get("/{briefing_id}", response_model=BriefingOut)
@@ -87,7 +89,7 @@ def get_briefing(briefing_id: UUID, user: User = Depends(get_current_user)):
 def update_briefing(briefing_id: UUID, body: BriefingPatch, user: User = Depends(get_current_user)):
     current = _get_owned(briefing_id, user)
     merged = {**current, **body.model_dump(exclude_none=True)}
-    return db.fetch_one(
+    row = db.fetch_one(
         f"""
         update briefings
         set topic = %s, time_of_day = %s, timezone = %s, is_active = %s, next_run_at = %s
@@ -97,12 +99,15 @@ def update_briefing(briefing_id: UUID, body: BriefingPatch, user: User = Depends
         (merged["topic"].strip(), merged["time_of_day"], merged["timezone"], merged["is_active"],
          next_run_at(merged["time_of_day"], merged["timezone"]), briefing_id, user.id),
     )
+    scheduler.schedule_briefing(row)
+    return row
 
 
 @router.delete("/{briefing_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_briefing(briefing_id: UUID, user: User = Depends(get_current_user)):
     if db.execute("delete from briefings where id = %s and user_id = %s", (briefing_id, user.id)) == 0:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Briefing not found")
+    scheduler.unschedule_briefing(str(briefing_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

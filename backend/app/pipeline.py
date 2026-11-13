@@ -58,7 +58,7 @@ def _set(episode_id: str, **fields) -> None:
 def run_episode(episode_id: str) -> None:
     row = db.fetch_one(
         """
-        select e.user_id, b.topic, u.email
+        select e.user_id, b.topic, b.timezone, u.email
         from episodes e
         join briefings b on b.id = e.briefing_id
         join auth.users u on u.id = e.user_id
@@ -72,12 +72,12 @@ def run_episode(episode_id: str) -> None:
 
     try:
         log.info("[%s] researching %r", episode_id, row["topic"])
-        articles = research.gather_articles(research.plan_queries(row["topic"]))
+        articles = research.gather_articles(research.plan_queries(row["topic"], row["timezone"]))
         if not articles:
             raise RuntimeError("No recent articles found for this topic")
 
         _set(episode_id, status="writing")
-        result = research.write_script(row["topic"], articles)
+        result = research.write_script(row["topic"], articles, row["timezone"])
 
         _set(
             episode_id,

@@ -4,18 +4,21 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import db, pipeline
+from app import db, pipeline, scheduler
 from app.config import settings
 from app.routes import briefings, episodes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.pool.open()
+    scheduler.start()
     yield
+    scheduler.shutdown()
     pipeline.executor.shutdown(wait=False, cancel_futures=True)
     db.pool.close()
 

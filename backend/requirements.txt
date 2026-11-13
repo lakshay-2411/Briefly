@@ -6,3 +6,4 @@ lameenc
 psycopg[binary]
 psycopg_pool
 pyjwt[crypto]
+apscheduler

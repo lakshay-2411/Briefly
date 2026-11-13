@@ -2,7 +2,8 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from app.services import llm, search
 
@@ -14,17 +15,18 @@ MIN_ARTICLES = 4
 MAX_ARTICLES = 15
 
 
-def _today() -> str:
-    return datetime.now(timezone.utc).strftime("%A, %d %B %Y")
+def _today(tz: str) -> str:
+    """Today's date as the listener sees it."""
+    return datetime.now(ZoneInfo(tz)).strftime("%A, %d %B %Y")
 
 
-def plan_queries(topic: str) -> list[str]:
+def plan_queries(topic: str, tz: str = "UTC") -> list[str]:
     system = (
         "You are a research planner for a daily news podcast. "
         "Given a topic, produce focused web search queries that will surface the latest news on it. "
         'Reply with JSON: {"queries": ["...", "..."]}'
     )
-    prompt = f"Today is {_today()}.\nTopic: {topic}\n\nWrite 3 to 5 distinct, specific search queries."
+    prompt = f"Today is {_today(tz)}.\nTopic: {topic}\n\nWrite 3 to 5 distinct, specific search queries."
     queries = llm.generate_json(system, prompt).get("queries") or []
     return [q for q in queries if isinstance(q, str) and q.strip()][:5] or [topic]
 
@@ -78,9 +80,9 @@ def _articles_block(articles: list[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def write_script(topic: str, articles: list[dict]) -> dict:
+def write_script(topic: str, articles: list[dict], tz: str = "UTC") -> dict:
     prompt = (
-        f"Today is {_today()}.\nPodcast topic: {topic}\n\n"
+        f"Today is {_today(tz)}.\nPodcast topic: {topic}\n\n"
         f"Articles ({len(articles)}):\n\n{_articles_block(articles)}"
     )
     result = llm.generate_json(SCRIPT_SYSTEM, prompt)
