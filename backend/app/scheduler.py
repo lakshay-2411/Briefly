@@ -1,4 +1,4 @@
-"""Daily scheduling: one in-memory cron job per active briefing (see task.md §4.1).
+"""Daily scheduling: one in-memory cron job per active briefing.
 
 The `briefings` table stays the source of truth:
 - on startup every active briefing gets a job, missed runs are caught up,
