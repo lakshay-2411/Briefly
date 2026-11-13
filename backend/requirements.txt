@@ -7,3 +7,4 @@ psycopg[binary]
 psycopg_pool
 pyjwt[crypto]
 apscheduler
+tzdata
